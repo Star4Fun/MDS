@@ -65,7 +65,7 @@ class Searcher:
                     continue  # skip empty lines
                 image_path = row[0]
                 features = [float(x) for x in row[1:]]
-                distances.append({"name":image_path, "distance":self.euclidean_distance(features, query_features)})
+                distances.append({"name":image_path, "distance":self.cosine_distance(features, query_features)})
         distances.sort(key=lambda x: x["distance"])
         return distances[:limit]
 
@@ -122,8 +122,12 @@ class Searcher:
 	#   - [float] result: Computed distance
 	#######################################################################################################################
     def minkowski_distance(self, p, x, y):
-        # TODO 
-        pass
+        distance = 0
+        if len(x) != len(y):
+            raise ValueError("Length mismatch")
+        for i in range(len(x)):
+            distance = distance + abs(x[i] - y[i])**p
+        return distance**(1/p)
 
 
     #######################################################################################################################
@@ -143,16 +147,23 @@ class Searcher:
 	#   - [float] result: Computed similarity
 	#######################################################################################################################
     def cosine_similarity(self, x, y):
-        # TODO 
-        pass
+        # sum(Ai*Bi)/sqrt(sum(A^2))*sqrt(sum(B^2))
+        a = 0
+        b = 0
+        c = 0
+        for i in range(len(x)):
+            a = a + x[i] * y[i]
+            b = b + x[i]**2
+            c = c + y[i]**2
+        return a / (math.sqrt(b) * math.sqrt(c))
+
 
     #######################################################################################################################
 	# Function cosine_distance(self, x, y):
 	# Function to calculate the cosine distance with help of cosine similarity
 	#######################################################################################################################
     def cosine_distance(self, x, y):
-        # TODO 
-        pass
+        return 1 - self.cosine_similarity(x, y)
 
 
 def to_gray_uint8(im):
@@ -206,6 +217,7 @@ if __name__ == '__main__':
             continue
         im = resize_to_height(im, target_h)
         name = d['name'].split("/")[-1]
+        print(name)
         im = label_below(im, name, pad=PAD)
         tiles += [vsep(labeled_h), im]
 
