@@ -29,11 +29,34 @@ def get_filename_from_path(path_to_file, file_ending = '.png'):
 
     return filename
 
+def to_gray_uint8(im):
+    if im is None:
+        return None
+    if im.ndim == 3:
+        im = cv2.cvtColor(im, cv2.COLOR_BGR2GRAY)
+    return im.astype(np.uint8)
+
+def resize_to_height(im, h):
+    if im.shape[0] == h:
+        return im
+    w = int(round(im.shape[1] * (h / im.shape[0])))
+    return cv2.resize(im, (w, h), interpolation=cv2.INTER_AREA)
+
+def vsep(h, w=4, value=255):
+    return np.full((h, w), value, dtype=np.uint8)
+
+PAD = 24
+
+def label_below(im, text, pad=PAD):
+    strip = np.full((pad, im.shape[1]), 255, np.uint8)
+    cv2.putText(strip, text, (5, pad-6), cv2.FONT_HERSHEY_SIMPLEX, 0.5, 0, 1, cv2.LINE_AA)
+    return cv2.vconcat([im, strip])  # Höhe + pad
+
+
 class Query:
-    # TODO change:
     output_name = "index.csv"
     code_path = "codes.csv"
-    image_directory = "./images/*"
+    image_directory = "./ImageCLEFmed2007_test/*"
     
     #######################################################################################################################
 	# Function __init__(self, query_image_name = None):
@@ -42,8 +65,11 @@ class Query:
     def __init__(self, query_image_name = None, limit = 10):
         self.limit = limit
         self.image_features = None
-        self.set_image_name(query_image_name)
+        self.query_image_name = None
         self.query_image_code = None
+        self.query_image = None
+        self.features = None
+        self.set_image_name(query_image_name)
 
     #######################################################################################################################
 	# Function set_image_name(self, query_image_name = "./images/739562.png"):
@@ -87,12 +113,18 @@ class Query:
     #   Create a Searcher and run a search
 	#######################################################################################################################
     def run(self):
+        if self.query_image is None:
+            print("Error: Image not found")
+            return
+        if self.features is None:
+            print("Error: Feature not found")
+            return
         # perform the search
         searcher = Searcher(self.output_name)
         results = searcher.search(self.features, self.limit)
 
         # If we do not get any results, we quit
-        if (results is False):
+        if results is False:
             quit()
         return results
 
@@ -147,7 +179,7 @@ class Query:
         # loop over each retrieved element
         for result_image in query_result:
             # get path to file
-            path_to_image = result_image[1]
+            path_to_image = result_image['name']
             # get name of file
             image_name = get_filename_from_path(path_to_image)
 
@@ -184,8 +216,32 @@ class Query:
     #   [- [Dictionary] correct_prediction:  Results of check_code]
 	#######################################################################################################################
     def visualize_result(self, query_result, correct_prediction_dictionary, image_size = (150,150)):
-        # TODO 
-        pass
+        assert self.query_image is not None
+        limit = 5
+        img = to_gray_uint8(self.query_image)
+        target_h = min(img.shape[0], image_size[0])
+        labeled_h = target_h + PAD
+
+        # Query vorbereiten
+        query_resized = resize_to_height(img, target_h)
+        query_labeled = label_below(query_resized, "query", pad=PAD)
+
+        # Kandidaten laden, auf gleiche Höhe bringen, labeln
+        tiles = [query_labeled]
+        for d in query_result:
+            im = to_gray_uint8(cv2.imread(d["name"], cv2.IMREAD_GRAYSCALE))
+            if im is None:
+                continue
+            im = resize_to_height(im, target_h)
+            name = d['name'].split("/")[-1]
+            print(name)
+            im = label_below(im, name, pad=PAD)
+            tiles += [vsep(labeled_h), im]
+
+        canvas = cv2.hconcat(tiles)
+        cv2.imshow("Results", canvas)
+        cv2.waitKey(0)
+        cv2.destroyAllWindows()
 
 
 

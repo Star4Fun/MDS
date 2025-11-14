@@ -192,7 +192,7 @@ def label_below(im, text, pad=PAD):
 if __name__ == '__main__':
     searcher = Searcher("index.csv")
     feature_extractor = FeatureExtractor()
-    img_path = "ImageCLEFmed2007_test/ImageCLEFmed2007_test/3216.png"
+    img_path = "ImageCLEFmed2007_test/3216.png"
     img = cv2.imread(img_path, cv2.IMREAD_GRAYSCALE)
     assert img is not None
     limit = 5
