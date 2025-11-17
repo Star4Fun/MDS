@@ -31,11 +31,65 @@ class Searcher:
     def __init__(self, index_path):
         # store our index path
         self.index_path = index_path
+        self._image_paths = None
+        self._index = None
+
+    # def _load_index(self):
+    #     if self._index is not None:
+    #         return
+    #
+    #     if not os.path.exists(self.index_path):
+    #         raise FileNotFoundError("Index does not exist")
+    #
+    #     with open(self.index_path) as f:
+    #         n_rows = sum(1 for _ in f)
+    #
+    #     index = np.zeros(n_rows)
+    #     # index = []
+    #     with open(self.index_path) as csvfile:
+    #         reader = csv.reader(csvfile, delimiter=",")
+    #         for idx, row in enumerate(reader):
+    #             if not row:
+    #                 continue
+    #             image_path = row[0]
+    #             features = [np.float32(x) for x in row[1:]]
+    #             index[idx] = features
+    #             # index.append((image_path, features))
+    #
+    #     self._index = index
+
+    def _load_index(self):
+        if self._index is not None:
+            return
+
+        if not os.path.exists(self.index_path):
+            raise FileNotFoundError("Index does not exist")
+        # Erstmal die Zeilen holen (ohne leere)
+        with open(self.index_path) as f:
+            rows = [row for row in csv.reader(f, delimiter=",") if row]
+
+        n_rows = len(rows)
+        if n_rows == 0:
+            raise ValueError("Index file is empty")
+
+        feature_dim = len(rows[0]) - 1  # alles außer image_path
+
+        # Matrix für Features + Liste für Pfade
+        index = np.empty((n_rows, feature_dim), dtype=np.float32)
+        image_paths = []
+
+        for i, row in enumerate(rows):
+            image_paths.append(row[0])
+            # Hier die Features – das ist der entscheidende Teil:
+            index[i] = np.asarray(row[1:], dtype=np.float32)
+        self._index = index
+        self._image_paths = image_paths
+
 
     #######################################################################################################################
-	# Function search(self, queryFeatures, limit = 5)
-	# Function retrieve similar images based on the queryFeatures
-	#
+    # Function search(self, queryFeatures, limit = 5)
+    # Function retrieve similar images based on the queryFeatures
+    #
     # 	# Tasks:
     #   - If there is no index file -> Print error and return False [Hint: Path(*String*).exists()]
     #   - Open the index file
@@ -47,27 +101,76 @@ class Searcher:
     #   - Close file
     #   - Sort the results according their distance
     #   - Return limited results
-	# 
-	# Input arguments:
-	#   - [list] query_features: Lost of query features
+    #
+    # Input arguments:
+    #   - [list] query_features: Lost of query features
     #   - [int] limit: Limit the retrieved results
-	# Output argument:
-	#   - [float] result: Computed distance
-	#######################################################################################################################
-    def search(self, query_features, limit = 5):
-        if not os.path.exists(self.index_path):
-            raise FileNotFoundError("Index does not exist")
-        distances = []
-        with open(self.index_path) as csvfile:
-            reader = csv.reader(csvfile, delimiter=",")
-            for row in reader:
-                if not row:
-                    continue  # skip empty lines
-                image_path = row[0]
-                features = [float(x) for x in row[1:]]
-                distances.append({"name":image_path, "distance":self.cosine_distance(features, query_features)})
-        distances.sort(key=lambda x: x["distance"])
-        return distances[:limit]
+    # Output argument:
+    #   - [float] result: Computed distance
+    #######################################################################################################################
+    def search(self, query_features, limit=5):
+        self._load_index()
+
+        q = np.asarray(query_features, dtype=np.float32)
+
+        # Compute cosine similarities for all images at once using matrix–vector multiplication.
+        #
+        # Explanation:
+        #   - self._index is a 2D NumPy array of shape (N, D)
+        #       N = number of images in the database
+        #       D = dimensionality of each feature vector
+        #
+        #   - q is the query feature vector with shape (D,)
+        #
+        #   - The expression "self._index @ q" performs a matrix–vector dot product.
+        #       For each row x_i in self._index, NumPy computes:
+        #
+        #           x_i · q     (the dot product)
+        #
+        #       This results in a 1D array of length N:
+        #
+        #           [ x_0 · q,
+        #             x_1 · q,
+        #             ...
+        #             x_(N-1) · q ]
+        #
+        #   - Because all feature vectors (including q) are L2-normalized,
+        #       the dot product x_i · q is exactly the cosine similarity:
+        #
+        #           cos_sim(x_i, q) = x_i · q
+        #
+        #   - This is extremely fast because the entire computation is executed
+        #       in optimized C/BLAS code, not in Python loops.
+        #
+        #   - In summary:
+        #         self._index @ q
+        #       gives you cosine similarity for all images in one shot.
+        sims = self._index @ q  # Shape: (N,)
+        dists = 1.0 - sims  # cosine distance
+
+        # get smallest distance
+        idx = np.argsort(dists)[:limit]
+
+        # return in a dictionary
+        return [
+            {"name": self._image_paths[i], "distance": dists[i]}
+            for i in idx
+        ]
+
+    # def search(self, query_features, limit = 5):
+    #     if not os.path.exists(self.index_path):
+    #         raise FileNotFoundError("Index does not exist")
+    #     distances = []
+    #     with open(self.index_path) as csvfile:
+    #         reader = csv.reader(csvfile, delimiter=",")
+    #         for row in reader:
+    #             if not row:
+    #                 continue  # skip empty lines
+    #             image_path = row[0]
+    #             features = [float(x) for x in row[1:]]
+    #             distances.append({"name":image_path, "distance":self.cosine_distance(features, query_features)})
+    #     distances.sort(key=lambda x: x["distance"])
+    #     return distances[:limit]
 
     #######################################################################################################################
 	# Function euclidean_distance(self, x, y):
@@ -82,12 +185,13 @@ class Searcher:
 	#   - [float] result: Computed distance
 	#######################################################################################################################
     def euclidean_distance(self, x, y):
-        distance = 0
-        if len(x) != len(y):
-            raise ValueError("Length mismatch")
-        for i in range(len(x)):
-                distance = distance + (x[i] - y[i]) ** 2
-        return math.sqrt(distance)
+        # distance = 0
+        # if len(x) != len(y):
+        #     raise ValueError("Length mismatch")
+        # for i in range(len(x)):
+        #         distance = distance + (x[i] - y[i]) ** 2
+        # return math.sqrt(distance)
+        return np.linalg.norm(x - y)
 
 
     #######################################################################################################################
@@ -101,12 +205,14 @@ class Searcher:
 	#   - [float] result: Computed distance
 	#######################################################################################################################
     def manhattan_distance(self, x, y):
-        distance = 0
-        if len(x) != len(y):
-            raise ValueError("Length mismatch")
-        for i in range(len(x)):
-            distance = distance + abs(x[i] - y[i])
-        return distance
+        # distance = 0
+        # if len(x) != len(y):
+        #     raise ValueError("Length mismatch")
+        # for i in range(len(x)):
+        #     distance = distance + abs(x[i] - y[i])
+        # return distance
+        return np.sum(np.abs(x - y))
+
 
     #######################################################################################################################
 	# Function minkowski_distance(self, p, x, y):
@@ -122,13 +228,11 @@ class Searcher:
 	#   - [float] result: Computed distance
 	#######################################################################################################################
     def minkowski_distance(self, p, x, y):
-        distance = 0
-        if len(x) != len(y):
+        if x.shape != y.shape:
             raise ValueError("Length mismatch")
-        for i in range(len(x)):
-            distance = distance + abs(x[i] - y[i])**p
-        return distance**(1/p)
 
+        diff = np.abs(x - y) ** p
+        return np.sum(diff) ** (1.0 / p)
 
     #######################################################################################################################
 	# Function cosine_similarity(self, x, y):
@@ -148,14 +252,18 @@ class Searcher:
 	#######################################################################################################################
     def cosine_similarity(self, x, y):
         # sum(Ai*Bi)/sqrt(sum(A^2))*sqrt(sum(B^2))
-        a = 0
-        b = 0
-        c = 0
-        for i in range(len(x)):
-            a = a + x[i] * y[i]
-            b = b + x[i]**2
-            c = c + y[i]**2
-        return a / (math.sqrt(b) * math.sqrt(c))
+        # a = 0
+        # b = 0
+        # c = 0
+        # for i in range(len(x)):
+        #     a = a + x[i] * y[i]
+        #     b = b + x[i]**2
+        #     c = c + y[i]**2
+        # return a / (math.sqrt(b) * math.sqrt(c))
+
+        # Since both vectors are L2-normalized, the cosine similarity reduces to
+        # a simple dot product. For normalized vectors: cos_sim(x, y) = x · y
+        return np.dot(x, y)
 
 
     #######################################################################################################################
@@ -163,7 +271,7 @@ class Searcher:
 	# Function to calculate the cosine distance with help of cosine similarity
 	#######################################################################################################################
     def cosine_distance(self, x, y):
-        return 1 - self.cosine_similarity(x, y)
+        return np.float32(1) - self.cosine_similarity(x, y)
 
 
 def to_gray_uint8(im):
