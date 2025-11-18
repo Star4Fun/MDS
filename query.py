@@ -29,12 +29,90 @@ def get_filename_from_path(path_to_file, file_ending = '.png'):
 
     return filename
 
+def to_gray_uint8(im):
+    if im is None:
+        return None
+    if im.ndim == 3:
+        im = cv2.cvtColor(im, cv2.COLOR_BGR2GRAY)
+    return im.astype(np.uint8)
+
+def resize_to_height(im, h):
+    if im.shape[0] == h:
+        return im
+    w = int(round(im.shape[1] * (h / im.shape[0])))
+    return cv2.resize(im, (w, h), interpolation=cv2.INTER_AREA)
+
+def vsep(height, width=10):
+    return np.full((height, width, 3), 255, np.uint8)  # weißer vertikaler Trenner
+
+PAD = 24
+
+def label_below(im, text, pad=PAD):
+    if im.ndim == 2:
+        im = cv2.cvtColor(im, cv2.COLOR_GRAY2BGR)
+
+    h, w = im.shape[:2]
+    strip = np.full((pad, w, 3), 255, np.uint8)  # weißer Balken unten
+
+    cv2.putText(
+        strip,
+        text,
+        (5, pad - 6),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.5,
+        (0, 0, 0),   # schwarzer Text
+        1,
+        cv2.LINE_AA
+    )
+
+    return cv2.vconcat([im, strip])
+
+
+
+def add_frame(img, thickness=4, color=(0, 0, 255)):
+    """
+    Add a colored frame around an image.
+
+    img:      grayscale (H, W) oder BGR (H, W, 3)
+    thickness: Rahmenbreite in Pixeln
+    color:    BGR-Farbe als Tuple, z.B. (0, 0, 255) = rot
+    """
+    # Falls Graubild: erst zu BGR machen
+    if img.ndim == 2:
+        img = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
+
+    return cv2.copyMakeBorder(
+        img,
+        thickness, thickness, thickness, thickness,
+        borderType=cv2.BORDER_CONSTANT,
+        value=color,
+    )
+
+codes = None
+code_path = "codes.csv"
+
+def get_codes():
+    global codes
+    if codes is not None:
+        return codes
+    codes = {}
+
+    # open the code file for reading
+    with open(code_path) as f:
+        # initialize the CSV reader
+        reader = csv.reader(f)
+
+        # loop over the rows in the index
+        for row in reader:
+            # add to dictionary; Key: file name, Item: IRMA code
+            codes[row[0]] = row[1]
+    return codes
+
 class Query:
-    # TODO change:
     output_name = "index.csv"
-    code_path = "codes.csv"
-    image_directory = "./images/*"
-    
+    image_directory = "./ImageCLEFmed2007_test/*"
+    searcher = Searcher(output_name)
+
     #######################################################################################################################
 	# Function __init__(self, query_image_name = None):
 	# Init function. Just call set_image_name
@@ -42,8 +120,11 @@ class Query:
     def __init__(self, query_image_name = None, limit = 10):
         self.limit = limit
         self.image_features = None
-        self.set_image_name(query_image_name)
+        self.query_image_name = None
         self.query_image_code = None
+        self.query_image = None
+        self.features = None
+        self.set_image_name(query_image_name)
 
     #######################################################################################################################
 	# Function set_image_name(self, query_image_name = "./images/739562.png"):
@@ -87,12 +168,17 @@ class Query:
     #   Create a Searcher and run a search
 	#######################################################################################################################
     def run(self):
+        if self.query_image is None:
+            print("Error: Image not found")
+            return
+        if self.features is None:
+            print("Error: Feature not found")
+            return
         # perform the search
-        searcher = Searcher(self.output_name)
-        results = searcher.search(self.features, self.limit)
+        results = self.searcher.search(self.features, self.limit)
 
         # If we do not get any results, we quit
-        if (results is False):
+        if results is False:
             quit()
         return results
 
@@ -114,21 +200,11 @@ class Query:
 	#######################################################################################################################
     def check_code(self, query_result):
         # check if there is a csv file
-        if not Path(self.code_path).exists():
-            print("There is no code file: ", self.code_path)
+        if not Path(code_path).exists():
+            print("There is no code file: ", code_path)
             return {}
 
-        codes = {}
-
-        # open the code file for reading
-        with open(self.code_path) as f:
-            # initialize the CSV reader
-            reader = csv.reader(f)
-
-            # loop over the rows in the index
-            for row in reader:
-                # add to dictionary; Key: file name, Item: IRMA code
-                codes[row[0]] = row[1]
+        codes = get_codes()
 
         # get the name 
         query_image_name = get_filename_from_path(self.query_image_name)
@@ -147,7 +223,7 @@ class Query:
         # loop over each retrieved element
         for result_image in query_result:
             # get path to file
-            path_to_image = result_image[1]
+            path_to_image = result_image['name']
             # get name of file
             image_name = get_filename_from_path(path_to_image)
 
@@ -184,8 +260,34 @@ class Query:
     #   [- [Dictionary] correct_prediction:  Results of check_code]
 	#######################################################################################################################
     def visualize_result(self, query_result, correct_prediction_dictionary, image_size = (150,150)):
-        # TODO 
-        pass
+        assert self.query_image is not None
+        limit = 5
+        img = to_gray_uint8(self.query_image)
+        target_h = min(img.shape[0], image_size[0])
+        labeled_h = target_h + PAD
+
+        # Query vorbereiten
+        query_resized = resize_to_height(img, target_h)
+        query_labeled = label_below(query_resized, "query", pad=PAD)
+
+        # Kandidaten laden, auf gleiche Höhe bringen, labeln
+        tiles = [query_labeled]
+        for idx, d in enumerate(query_result):
+            im = to_gray_uint8(cv2.imread(d["name"], cv2.IMREAD_GRAYSCALE))
+            if im is None:
+                continue
+            name = d['name'].split("/")[-1]
+            print(name)
+            color = ((0, 255, 0) if correct_prediction_dictionary[name.split(".")[0]] else (0, 0, 255))
+            im = add_frame(im, color=color)
+            im = resize_to_height(im, target_h)
+            im = label_below(im, name, pad=PAD)
+            tiles += [vsep(labeled_h), im]
+
+        canvas = cv2.hconcat(tiles)
+        cv2.imshow("Results", canvas)
+        cv2.waitKey(0)
+        cv2.destroyAllWindows()
 
 
 
