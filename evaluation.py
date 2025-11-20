@@ -172,7 +172,6 @@ def mean_average_precision(limit=20):
                 desc="Processing relevant images",
             )
         )
-    relevant_mask = list()
     aps = np.zeros(len(results))
     for q_idx, hits in enumerate(results):
         cur_code = os.path.basename(image_paths[q_idx].split(".")[0])
@@ -185,14 +184,13 @@ def mean_average_precision(limit=20):
             hit_code = codes[os.path.basename(hit['name']).split(".")[0]]
             if relevant_code == hit_code:
                 mask[r_idx] = True
-        aps[q_idx] = average_precision(mask, len(hits))
+        aps[q_idx] = average_precision(mask, relevant_results[q_idx])
     return float(np.mean(aps))
 
 
 if __name__ == "__main__":
     test = [True, True, False, False]
     print("P@K: ", precision_at_k(test))
-    print(amount_relevant_images("3145"))
     print("AveP: ", average_precision(test, 5))
 
     result = mean_average_precision(limit=10)
