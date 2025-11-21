@@ -52,7 +52,7 @@ def plot_signals(df, title):
 #   - Compare preprocessed vs. raw data.
 #######################################################################################################################
 if __name__ == "__main__":
-    DATA_DIR = Path("data_train")
+    DATA_DIR = Path("data/data_train")
     files = sorted(DATA_DIR.glob("case_*_BIS_HR_ART_1hz.csv"))
     assert files, "No patient files found in data_train/."
 
