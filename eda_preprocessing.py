@@ -15,6 +15,8 @@
 from pathlib import Path
 import pandas as pd
 import matplotlib.pyplot as plt
+
+import utils
 from utils import preprocess_case, sanity_checks, BIS_TARGET_LOW, BIS_TARGET_HIGH, ART_THRESH
 
 
@@ -34,7 +36,16 @@ from utils import preprocess_case, sanity_checks, BIS_TARGET_LOW, BIS_TARGET_HIG
 #   - None (displays matplotlib plot)
 #######################################################################################################################
 def plot_signals(df, title):
-    pass
+    time = df["sec"]
+    fig, axes = plt.subplots(3, 1, sharex=True, figsize=(12, 8))
+    axes[0].plot(time, df["BIS"])
+    axes[0].set_ylabel("BIS")
+    axes[0].set_title(title)
+    axes[1].plot(time, df["HR"].interpolate(limit_direction="both"))
+    axes[1].set_ylabel("HR [bpm]")
+    axes[2].plot(time, df["ART"])
+    axes[2].set_ylabel("ART")
+    fig.show()
 
 
 #######################################################################################################################
@@ -57,10 +68,14 @@ if __name__ == "__main__":
     assert files, "No patient files found in data_train/."
 
     # TODO Load first patient file
+    df = pd.read_csv(files[0])
 
     # TODO Run function sanity checks
+    utils.sanity_checks(df, files[0])
 
     # TODO Apply preprocessing
+    utils.preprocess_case(df)
 
     # TODO Plot signals
+    plot_signals(df, files[0])
 
