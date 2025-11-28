@@ -10,12 +10,48 @@
 #   - HR and ART are used for feature extraction.
 #   - Students will generate their own training and test feature sets with labels.
 #######################################################################################################################
-
+import os
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 import pandas as pd
 import numpy as np
 from utils import preprocess_case, WIN_SEC, STEP_SEC, BIS_TARGET_LOW, BIS_TARGET_HIGH, ART_THRESH, UNSTABLE_SHARE
 from tqdm import tqdm
+
+def series_slope(series: pd.Series) -> float:
+    # if time index: use seconds as x
+    if isinstance(series.index, pd.DatetimeIndex) or isinstance(series.index, pd.TimedeltaIndex):
+        x = (series.index - series.index[0]).total_seconds()
+    else:
+        x = np.arange(len(series))
+
+    y = series.values
+
+    # handle all-NaN / too few points
+    mask = ~np.isnan(y)
+    if mask.sum() < 2:
+        return np.nan
+
+    x = x[mask]
+    y = y[mask]
+
+    # linear regression via polyfit
+    slope, _ = np.polyfit(x, y, 1)
+    return slope
+
+
+def fft_energy(series: pd.Series) -> float:
+    y = series.values
+    y = y[~np.isnan(y)]
+    if len(y) == 0:
+        return np.nan
+
+    # remove mean to avoid DC-dominanz
+    y = y - y.mean()
+
+    fft_vals = np.fft.rfft(y)
+    power = np.abs(fft_vals) ** 2
+    return power.sum()
 
 
 #######################################################################################################################
@@ -32,8 +68,40 @@ from tqdm import tqdm
 #   - [dict] features: dictionary of feature_name: value
 #######################################################################################################################
 def features_window(hr, art):
-    # TODO implment features
-    pass 
+    hr = hr.dropna()
+    art = art.dropna()
+    q25_hr = hr.quantile(0.25)
+    q75_hr = hr.quantile(0.75)
+    q25_art = art.quantile(0.25)
+    q75_art = art.quantile(0.75)
+    return {
+        "HR_mean": hr.mean(),
+        "HR_median": hr.median(),
+        "HR_std": hr.std(),
+        "HR_min": hr.min(),
+        "HR_max": hr.max(),
+        "HR_range": hr.max()-hr.min(),
+        "HR_IQR": q75_hr - q25_hr,
+        "HR_diff_mean": hr.diff().abs().mean(),
+        "HR_slope": series_slope(hr),
+        "HR_fft_energy": fft_energy(hr),
+        "ART_mean": art.mean(),
+        "ART_std": art.std(),
+        "ART_min": art.min(),
+        "ART_max": art.max(),
+        "ART_median": art.median(),
+        "ART_range": art.max()-art.min(),
+        "ART_IQR": q75_art - q25_art,
+        "ART_variation": art.diff().abs().mean(),
+        "ART_slope": series_slope(art),
+    }
+
+def is_unstable_from_bis(bis: pd.Series, threshold: float = 0.3) -> bool:
+    bis = bis.dropna()
+    if bis.empty:
+        return False
+    frac_unstable = ((bis < BIS_TARGET_LOW) | (bis > BIS_TARGET_HIGH)).mean()
+    return frac_unstable >= UNSTABLE_SHARE
 
 
 #######################################################################################################################
@@ -55,26 +123,44 @@ def features_window(hr, art):
 #   - [pd.Series] y: label vector
 #######################################################################################################################
 def process_case(file_path, nan_threshold=0.5):
-    # TODO load CSV as dataframe
-    
-    # TODO apply preprocessing on dataframe
-   
-    # TODO implement sliding windows
-    # Hint:
-    #   - You can implement sliding windows using a for-loop.
-    #   - The loop should move through the DataFrame in steps of STEP_SEC.
-    #   - Each window should have a fixed length WIN_SEC.
-    #   - Be careful not to exceed the length of the DataFrame at the end.
+    df_raw = pd.read_csv(file_path)
 
-    # TODO implment for-loop for sliding windows
-    
-        # TODO check NaN proportion per column, skip window if too many NaNs
+    df = preprocess_case(df_raw)
+    hr = df['HR']
+    art = df['ART']
+    bis = df['BIS']
 
-        # TODO compute features and label for the window
+    all_features = []
+    all_labels = []
 
-        # TODO append to X and y
-    pass
+    for start in range(0, len(hr) - WIN_SEC + 1, STEP_SEC):
+        end = start + WIN_SEC
+        hr_win = hr.iloc[start:end]
+        art_win = art.iloc[start:end]
+        bis_win = bis.iloc[start:end]
 
+        nan_fraction = pd.concat([hr_win, art_win], axis=1).isna().mean().max()
+        if nan_fraction > nan_threshold:
+            continue
+
+        feature_dict = features_window(hr_win, art_win)
+        all_features.append(feature_dict)
+
+        label = 1 if is_unstable_from_bis(bis_win) else 0
+        all_labels.append(label)
+
+    return pd.DataFrame(all_features), pd.Series(all_labels, name="label")
+
+def process_case_helper(file_path, nan_threshold=0.5):
+    X, Y = process_case(file_path, nan_threshold)
+
+    if X is None or Y is None:
+        return None, None
+
+    if X.empty or Y.empty:
+        return None, None
+
+    return X, Y
 
 #######################################################################################################################
 # Function process_dataset(split="train"):
@@ -92,36 +178,33 @@ def process_case(file_path, nan_threshold=0.5):
 #######################################################################################################################
 def process_dataset(split="train"):
     assert split in ["train", "test"], "split must be 'train' or 'test'"
+    DATA_DIR = Path(f"data/data_{split}")
+    files = sorted(DATA_DIR.glob("case_*_BIS_HR_ART_1hz.csv"))
+    assert files, "No patient files found in data_train/."
 
+    with ThreadPoolExecutor() as executor:
+        results = list(
+            tqdm(
+                executor.map(process_case_helper, files),
+                total=len(files),
+                desc="Processing cases",
+            )
+        )
+    x, y = zip(*results)
 
-    # TODO iterate over all patient files in the specified split
+    x_concated = pd.concat(x, ignore_index=True)
+    y_concated = pd.concat(y, ignore_index=True)
 
-        # TODO process one case into features + labels
-        
-        # TODO Skip completely empty results (no valid windows for this patient)
+    features_dir = Path("features")
+    features_dir.mkdir(parents=True, exist_ok=True)
 
-    # If after all patients nothing valid was found, stop early
+    x_path = features_dir / f"X_{split}.csv"
+    y_path = features_dir / f"y_{split}.csv"
 
-    # TODO concatenate all patients into one feature matrix and one label vector
-    
-
-    # TODO save feature matrix and labels to CSV
-    pass 
-
-
+    x_concated.to_csv(x_path, index=False)
+    y_concated.to_csv(y_path, index=False)
 
 
 if __name__ == "__main__":
-    # Example usage
     process_dataset("train")
     process_dataset("test")
-
-    ###################################################################################################################
-    # TODO::
-    #   - Run both pipelines to generate X_train/y_train and X_test/y_test
-    #   - Use only HR and ART as features
-    #   - Use BIS only for label generation, not as a feature!
-    #   - Train models on training data and evaluate on the test set!
-    #   - Experiment with different features, you are free to apply feature selection techniques 
-    #   - Please do not change train /test split or label logic!
-    ###################################################################################################################
