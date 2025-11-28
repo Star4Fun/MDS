@@ -15,6 +15,7 @@
 from pathlib import Path
 import pandas as pd
 import matplotlib.pyplot as plt
+import utils
 from utils import preprocess_case, sanity_checks, BIS_TARGET_LOW, BIS_TARGET_HIGH, ART_THRESH
 
 
@@ -35,17 +36,33 @@ from utils import preprocess_case, sanity_checks, BIS_TARGET_LOW, BIS_TARGET_HIG
 #######################################################################################################################
 def plot_signals(df, title):
     time = df["sec"]
-    fig, axes = plt.subplots(3, 1, sharex=True, figsize=(12,8))
-    axes[0].plot(time, df["BIS"])
+    fig, axes = plt.subplots(3, 1, sharex=True, figsize=(12, 8))
+
+    # BIS + green target range
+    axes[0].plot(time, df["BIS"], label="BIS")
+    axes[0].axhspan(BIS_TARGET_LOW, BIS_TARGET_HIGH, color="green", alpha=0.2)
     axes[0].set_ylabel("BIS")
     axes[0].set_title(title)
-    #df["HR"].interpolate() füllt fehlende Werte ->Lücken füllen, damit die Kurve nicht abbricht.
-    #limit_direction="both" = auch am Anfang und Ende der Zeitreihe werden fehlende Werte ersetzt.
-    axes[1].plot(time, df["HR"].interpolate(limit_direction="both"))
+
+    # BIS - periods where BIS < 40 or BIS > 60
+    bad_low = df["BIS"] < BIS_TARGET_LOW
+    bad_high = df["BIS"] > BIS_TARGET_HIGH
+    axes[0].plot(time[bad_low], df["BIS"][bad_low], "r.", markersize=1)
+    axes[0].plot(time[bad_high], df["BIS"][bad_high], "r.", markersize=1)
+
+    # HR
+    axes[1].plot(time, df["HR"])
     axes[1].set_ylabel("HR [bpm]")
-    axes[2].plot(time, df["ART"])
+
+    # ART + rote Linie bei 65
+    axes[2].plot(time, df["ART"], label = "ART")
+    axes[2].axhline(ART_THRESH, color="red", linestyle="--")
     axes[2].set_ylabel("ART")
+
+    plt.xlabel("Time [sec]")
+    plt.tight_layout()
     fig.show()
+
 
 
 #######################################################################################################################
@@ -68,13 +85,19 @@ if __name__ == "__main__":
     assert files, "No patient files found in data_train/."
 
     # TODO Load first patient file
-    df = pd.read_csv(files[0])
+    df_raw = pd.read_csv(files[0])
 
     # TODO Run function sanity checks
-    utils.sanity_checks(df, files[0])
+    utils.sanity_checks(df_raw, files[0])
 
     # TODO Apply preprocessing
-    utils.preprocess_case(df)
+    df_clean = utils.preprocess_case(df_raw)
+
+    # compute and print descriptive statistics
+    stats = df_clean[["BIS", "HR", "ART"]].agg(["min", "max", "mean"])
+    print("=== Descriptive statistics ===")
+    print(stats)
 
     # TODO Plot signals
-    plot_signals(df, files[0])
+    plot_signals(df_raw, "RAW Signal")
+    plot_signals(df_clean, "PREPROCESSED Signal")
