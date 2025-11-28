@@ -14,6 +14,7 @@
 from pathlib import Path
 import pandas as pd
 import numpy as np
+import utils
 from utils import preprocess_case, WIN_SEC, STEP_SEC, BIS_TARGET_LOW, BIS_TARGET_HIGH, ART_THRESH, UNSTABLE_SHARE
 from tqdm import tqdm
 
@@ -31,10 +32,30 @@ from tqdm import tqdm
 # Output argument:
 #   - [dict] features: dictionary of feature_name: value
 #######################################################################################################################
-def features_window(hr, art):
+def features_window(hr: pd.Series, art: pd.Series):
     # TODO implment features
-    pass 
+    features = {}
 
+    def stats(series):
+        return {
+            "mean": series.mean(),
+            "std": series.std(),
+            "min": series.min(),
+            "max": series.max(),
+            "median": series.median(),
+            "iqr": series.quantile(0.75) - series.quantile(0.25)
+        }
+    
+    hr_stats = stats(hr)
+    art_stats = stats(art)
+
+    for x, y in hr_stats.items():
+        features[f"HR_{x}"] = y
+
+    for x, y in art_stats.items():
+        features[f"ART_{x}"] = y
+
+    return features
 
 #######################################################################################################################
 # Function process_case(file_path):
@@ -58,7 +79,7 @@ def process_case(file_path, nan_threshold=0.5):
     # TODO load CSV as dataframe
     
     # TODO apply preprocessing on dataframe
-   
+    
     # TODO implement sliding windows
     # Hint:
     #   - You can implement sliding windows using a for-loop.
