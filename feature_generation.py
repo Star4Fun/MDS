@@ -77,15 +77,22 @@ def features_window(hr: pd.Series, art: pd.Series):
 #######################################################################################################################
 def process_case(file_path, nan_threshold=0.5):
     # TODO load CSV as dataframe
+    DATA_DIR = Path(file_path)
+    files = sorted(DATA_DIR.glob("case_*_BIS_HR_ART_1hz.csv"))
+    assert files, f"No patient files found in {file_path}"
+
+    df_raw = pd.read_csv(file_path)
     
     # TODO apply preprocessing on dataframe
-    
+    df_preprocess = utils.preprocess_case(df_raw)
+
     # TODO implement sliding windows
     # Hint:
     #   - You can implement sliding windows using a for-loop.
     #   - The loop should move through the DataFrame in steps of STEP_SEC.
     #   - Each window should have a fixed length WIN_SEC.
     #   - Be careful not to exceed the length of the DataFrame at the end.
+    
 
     # TODO implment for-loop for sliding windows
     
