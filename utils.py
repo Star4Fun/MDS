@@ -38,6 +38,7 @@ STEP_SEC = 150  # 50% overlap
 #######################################################################################################################
 def preprocess_case(df):
     df = df.copy()
+
     # TODO set implausible values to NaN
     df.loc[(df["BIS"] < BIS_MIN) | (df["BIS"] > BIS_MAX), "BIS"] = np.nan
     df.loc[(df["HR"]  < HR_MIN)  | (df["HR"]  > HR_MAX),  "HR"]  = np.nan

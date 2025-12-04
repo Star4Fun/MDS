@@ -15,6 +15,7 @@
 from pathlib import Path
 import pandas as pd
 import matplotlib.pyplot as plt
+
 import utils
 from utils import preprocess_case, sanity_checks, BIS_TARGET_LOW, BIS_TARGET_HIGH, ART_THRESH
 
@@ -62,7 +63,6 @@ def plot_signals(df, title):
     plt.xlabel("Time [sec]")
     plt.tight_layout()
     fig.show()
-
 
 
 #######################################################################################################################
