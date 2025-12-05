@@ -17,13 +17,42 @@
 
 import pandas as pd
 from pathlib import Path
+
+from pandas import Series, DataFrame
+from sklearn.base import ClassifierMixin, BaseEstimator
 from sklearn.metrics import accuracy_score, f1_score
-
-# TODO Load packages for different classifiers
-
+import numpy as np
 # Cross Validation imports
 from sklearn.model_selection import GroupKFold, cross_val_score
 
+
+class Perceptron(ClassifierMixin, BaseEstimator):
+    def __init__(self, lr=0.1, max_iter=1000):
+        self.lr = lr
+        self.max_iter = max_iter
+
+    def fit(self, X, y):
+        X = np.c_[X, np.ones(len(X))]   # Bias-Term
+        self.w_ = np.zeros(X.shape[1])
+
+        for _ in range(self.max_iter):
+            misclassified = False
+            for xi, yi in zip(X, y):
+                y_pred = np.sign(self.w_.dot(xi))
+
+                if y_pred != yi:
+                    print(yi, xi)
+                    self.w_ += self.lr * yi * xi
+                    misclassified = True
+
+            if not misclassified:
+                break
+
+        return self
+
+    def predict(self, X):
+        X = np.c_[X, np.ones(len(X))]
+        return np.sign(X.dot(self.w_))
 
 #######################################################################################################################
 # Function load_data(split="train")
@@ -39,8 +68,15 @@ from sklearn.model_selection import GroupKFold, cross_val_score
 #   [pd.Series]   y : labels
 #######################################################################################################################
 def load_data(split="train"):
-    # TODO implement loading of features and labels either for training or test set
-    pass
+    assert split in ["train", "test"], "split must be 'train' or 'test'"
+    features_dir = Path("features")
+    assert features_dir, f"No features found in {features_dir}/."
+    features_dir = Path("features")
+    x_path = features_dir / f"X_{split}.csv"
+    y_path = features_dir / f"y_{split}.csv"
+    x = pd.read_csv(x_path)
+    y = pd.read_csv(y_path, index_col=0, squeeze=True)
+    return x, y
 
 
 #######################################################################################################################
@@ -60,8 +96,6 @@ def load_data(split="train"):
 #   Returns dict with mean/std for Accuracy and F1 across folds
 #######################################################################################################################
 def cross_validate_model(model, X, y, groups, cv_splits=5):
-
-    # TODO Adapt this to your feature matrix structure
     X_nocase = X.drop(columns=["case_id"])
     gkf = GroupKFold(n_splits=cv_splits)
 
@@ -131,12 +165,14 @@ if __name__ == "__main__":
     X_test, y_test   = load_data("test")
 
     # Required for Group-K-Fold, depends on how you created the feature matrix!
-    # TODO adapt this to your feature matrix structure
     groups = X_train["case_id"]
+
+    clf = Perceptron(lr=0.1)
+    clf.fit(X_train, y_train)
 
     # TODO Define classifiers
     classifiers = [
-        
+        clf
     ]
 
 

@@ -15,6 +15,8 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 import pandas as pd
 import numpy as np
+import pathlib
+
 from utils import preprocess_case, WIN_SEC, STEP_SEC, BIS_TARGET_LOW, BIS_TARGET_HIGH, ART_THRESH, UNSTABLE_SHARE
 from tqdm import tqdm
 
@@ -130,6 +132,9 @@ def process_case(file_path, nan_threshold=0.5):
     art = df['ART']
     bis = df['BIS']
 
+    basename = pathlib.Path(file_path).name
+    case_id = (basename or "").split("_")[1] if "_" in (basename or "") else None
+
     all_features = []
     all_labels = []
 
@@ -144,7 +149,9 @@ def process_case(file_path, nan_threshold=0.5):
             continue
 
         feature_dict = features_window(hr_win, art_win)
-        all_features.append(feature_dict)
+        new_dict = {"case_id": case_id}
+        new_dict.update(feature_dict)
+        all_features.append(new_dict)
 
         label = 1 if is_unstable_from_bis(bis_win) else 0
         all_labels.append(label)
