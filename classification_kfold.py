@@ -24,35 +24,51 @@ from sklearn.metrics import accuracy_score, f1_score
 import numpy as np
 # Cross Validation imports
 from sklearn.model_selection import GroupKFold, cross_val_score
+from sklearn.preprocessing import StandardScaler
 
 
 class Perceptron(ClassifierMixin, BaseEstimator):
-    def __init__(self, lr=0.1, max_iter=1000):
+    def __init__(self, lr=0.01, epochs=150):
         self.lr = lr
-        self.max_iter = max_iter
+        self.epochs = epochs
 
     def fit(self, X, y):
-        X = np.c_[X, np.ones(len(X))]   # Bias-Term
+        # Skalieren
+        self.scaler_ = StandardScaler()
+        X = self.scaler_.fit_transform(X)
+
+        # Label in {-1, +1}
+        y = np.where(y == 0, -1, 1)
+
+        # Bias
+        X = np.c_[X, np.ones(len(X))]
+
         self.w_ = np.zeros(X.shape[1])
+        self.classes_ = np.array([0, 1])
 
-        for _ in range(self.max_iter):
-            misclassified = False
-            for xi, yi in zip(X, y):
-                y_pred = np.sign(self.w_.dot(xi))
+        for epoch in range(self.epochs):
+            # Shuffle pro Epoche
+            idx = np.random.permutation(len(X))
+            X_epoch = X[idx]
+            y_epoch = y[idx]
 
-                if y_pred != yi:
-                    print(yi, xi)
+            errors = 0
+
+            for xi, yi in zip(X_epoch, y_epoch):
+                if yi * (self.w_ @ xi) <= 0:
                     self.w_ += self.lr * yi * xi
-                    misclassified = True
+                    errors += 1
 
-            if not misclassified:
-                break
+            print(f"Epoch {epoch+1}, errors={errors}")
 
         return self
 
     def predict(self, X):
+        X = self.scaler_.transform(X)
         X = np.c_[X, np.ones(len(X))]
-        return np.sign(X.dot(self.w_))
+        raw = np.sign(X @ self.w_)
+        return (raw == 1).astype(int)
+
 
 #######################################################################################################################
 # Function load_data(split="train")
@@ -75,7 +91,7 @@ def load_data(split="train"):
     x_path = features_dir / f"X_{split}.csv"
     y_path = features_dir / f"y_{split}.csv"
     x = pd.read_csv(x_path)
-    y = pd.read_csv(y_path, index_col=0, squeeze=True)
+    y = pd.read_csv(y_path)["label"]
     return x, y
 
 
@@ -167,7 +183,7 @@ if __name__ == "__main__":
     # Required for Group-K-Fold, depends on how you created the feature matrix!
     groups = X_train["case_id"]
 
-    clf = Perceptron(lr=0.1)
+    clf = Perceptron(lr=0.01)
     clf.fit(X_train, y_train)
 
     # TODO Define classifiers
