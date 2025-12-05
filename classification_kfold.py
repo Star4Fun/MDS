@@ -25,6 +25,7 @@ import numpy as np
 # Cross Validation imports
 from sklearn.model_selection import GroupKFold, cross_val_score
 from sklearn.preprocessing import StandardScaler
+from tqdm import tqdm
 
 
 class Perceptron(ClassifierMixin, BaseEstimator):
@@ -46,7 +47,7 @@ class Perceptron(ClassifierMixin, BaseEstimator):
         self.w_ = np.zeros(X.shape[1])
         self.classes_ = np.array([0, 1])
 
-        for epoch in range(self.epochs):
+        for _ in tqdm(range(self.epochs)):
             # Shuffle pro Epoche
             idx = np.random.permutation(len(X))
             X_epoch = X[idx]
@@ -58,8 +59,6 @@ class Perceptron(ClassifierMixin, BaseEstimator):
                 if yi * (self.w_ @ xi) <= 0:
                     self.w_ += self.lr * yi * xi
                     errors += 1
-
-            print(f"Epoch {epoch+1}, errors={errors}")
 
         return self
 
@@ -186,11 +185,9 @@ if __name__ == "__main__":
     clf = Perceptron(lr=0.01)
     clf.fit(X_train, y_train)
 
-    # TODO Define classifiers
     classifiers = [
         clf
     ]
-
 
     ###############################################################################################################
     # Train & evaluate via Group-K-Fold CV
