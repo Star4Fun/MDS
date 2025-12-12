@@ -1,0 +1,10 @@
+RESULT SUMMARY
+----------------------------------------------------------------------------------
+Cross-Validation (Group-K-Fold) results:
+Perceptron: ACC=0.5332±0.0437,  F1=0.5793±0.0650
+
+Selected best model:
+Perceptron: ACC=0.5332, F1=0.5793
+
+Local TEST evaluation:
+ACC=0.5053, F1=0.5978
