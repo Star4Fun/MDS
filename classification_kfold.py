@@ -20,6 +20,11 @@ from pathlib import Path
 
 from pandas import Series, DataFrame
 from sklearn.base import ClassifierMixin, BaseEstimator
+from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
+from sklearn.linear_model import LogisticRegression
+from sklearn.svm import SVC
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import accuracy_score, f1_score
 import numpy as np
 # Cross Validation imports
@@ -114,8 +119,9 @@ def cross_validate_model(model, X, y, groups, cv_splits=5):
     X_nocase = X.drop(columns=["case_id"])
     gkf = GroupKFold(n_splits=cv_splits)
 
-    acc = cross_val_score(model, X_nocase, y, groups=groups, cv=gkf, scoring="accuracy")
-    f1  = cross_val_score(model, X_nocase, y, groups=groups, cv=gkf, scoring="f1")
+    # Use parallel jobs to speed up cross-validation
+    acc = cross_val_score(model, X_nocase, y, groups=groups, cv=gkf, scoring="accuracy", n_jobs=-1)
+    f1  = cross_val_score(model, X_nocase, y, groups=groups, cv=gkf, scoring="f1", n_jobs=-1)
 
     print(f"CV ({model.__class__.__name__}): ACC={acc.mean():.3f}±{acc.std():.3f},  F1={f1.mean():.3f}±{f1.std():.3f}")
 
@@ -182,11 +188,14 @@ if __name__ == "__main__":
     # Required for Group-K-Fold, depends on how you created the feature matrix!
     groups = X_train["case_id"]
 
-    clf = Perceptron(lr=0.01)
-    clf.fit(X_train, y_train)
-
     classifiers = [
-        clf
+        RandomForestClassifier(n_estimators=100, n_jobs=-1, random_state=42),
+        GradientBoostingClassifier(n_estimators=100, learning_rate=0.1, max_depth=3, random_state=42),
+        # SVM requires feature scaling -> use a pipeline with StandardScaler
+        make_pipeline(StandardScaler(), SVC(kernel='rbf', C=1.0, gamma='scale')),
+        LogisticRegression(max_iter=1000),
+        # include custom Perceptron but reduce epochs for faster CV during development
+        Perceptron(lr=0.01, epochs=50),
     ]
 
     ###############################################################################################################

@@ -1,10 +1,14 @@
 RESULT SUMMARY
 ----------------------------------------------------------------------------------
 Cross-Validation (Group-K-Fold) results:
-Perceptron: ACC=0.5332±0.0437,  F1=0.5793±0.0650
+RandomForestClassifier: ACC=0.5586±0.0117,  F1=0.6659±0.0117
+GradientBoostingClassifier: ACC=0.5776±0.0194,  F1=0.7139±0.0159
+Pipeline: ACC=0.5845±0.0228,  F1=0.7249±0.0176
+LogisticRegression: ACC=0.5828±0.0210,  F1=0.7284±0.0188
+Perceptron: ACC=0.5043±0.0177,  F1=0.5322±0.1171
 
 Selected best model:
-Perceptron: ACC=0.5332, F1=0.5793
+Pipeline: ACC=0.5845, F1=0.7249
 
 Local TEST evaluation:
-ACC=0.5053, F1=0.5978
+ACC=0.5791, F1=0.7245
