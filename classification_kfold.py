@@ -26,7 +26,7 @@ import numpy as np
 from sklearn.model_selection import GroupKFold, cross_val_score
 from sklearn.preprocessing import StandardScaler
 from tqdm import tqdm
-
+from sklearn.svm import SVC
 
 class Perceptron(ClassifierMixin, BaseEstimator):
     def __init__(self, lr=0.01, epochs=150):
@@ -184,9 +184,11 @@ if __name__ == "__main__":
 
     clf = Perceptron(lr=0.01)
     clf.fit(X_train, y_train)
+    svc = SVC(kernel="linear")
 
     classifiers = [
-        clf
+        clf,
+        svc
     ]
 
     ###############################################################################################################
