@@ -20,10 +20,13 @@ from pathlib import Path
 
 from pandas import Series, DataFrame
 from sklearn.base import ClassifierMixin, BaseEstimator
+from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
+from sklearn.linear_model import SGDClassifier, LogisticRegression
 from sklearn.metrics import accuracy_score, f1_score
 import numpy as np
 # Cross Validation imports
 from sklearn.model_selection import GroupKFold, cross_val_score
+from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
 from tqdm import tqdm
 from sklearn.svm import SVC
@@ -182,13 +185,17 @@ if __name__ == "__main__":
     # Required for Group-K-Fold, depends on how you created the feature matrix!
     groups = X_train["case_id"]
 
-    clf = Perceptron(lr=0.01)
-    clf.fit(X_train, y_train)
-    svc = SVC(kernel="linear")
+    # clf = Perceptron(lr=0.01)
+    # clf.fit(X_train, y_train)
 
     classifiers = [
-        clf,
-        svc
+        RandomForestClassifier(n_estimators=100, n_jobs=-1, random_state=42),
+        GradientBoostingClassifier(n_estimators=100, learning_rate=0.1, max_depth=3, random_state=42),
+        # SVM requires feature scaling -> use a pipeline with StandardScaler
+        make_pipeline(StandardScaler(), SVC(kernel='rbf', C=1.0, gamma='scale')),
+        LogisticRegression(max_iter=1000),
+        # include custom Perceptron but reduce epochs for faster CV during development
+        Perceptron(lr=0.01, epochs=50)
     ]
 
     ###############################################################################################################
