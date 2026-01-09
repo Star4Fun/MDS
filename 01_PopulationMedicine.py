@@ -39,7 +39,7 @@ def plot_random_data(n_samples=2000, centers=[[-2, -1], [4, 4], [1, 1]]):
 
     # TODO Step 3: Set the title of the plot, assign Labels to the axis and display the plot
     plt.title('Plot Random')
-    plt.show()x
+    plt.show()
 
     return None  # This function does not return any value
 
