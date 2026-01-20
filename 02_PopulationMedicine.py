@@ -11,7 +11,7 @@ from scipy.cluster.hierarchy import dendrogram, linkage
 from sklearn.cluster import AgglomerativeClustering
 
 # Path and column names for dataset
-bc_data_path = '../wdbc.data'  # Path to the input data file.
+bc_data_path = './data/wdbc.data'  # Path to the input data file.
 bc_data_columns = [
     'id', 'diagnosis', 'radius_mean', 'texture_mean', 'perimeter_mean', 'area_mean',
     'smoothness_mean', 'compactness_mean', 'concavity_mean', 'concave points_mean',
@@ -35,14 +35,27 @@ bc_data_columns = [
 #   This function calculates the correlation matrix for the given dataframe and generates a heatmap using seaborn.
 #   It visually represents the pairwise correlation between attributes.
 #######################################################################################################################
-
 def correlation_map(data):
-    # TODO Step 1: Calculate the correlation matrix of the dataframe
-    #  Hint: Use the `corr()` method on the dataframe.
+    # Step 1
+    corr = data.corr()
 
-    # TODO Step 2: Generate the heatmap plot for the correlation matrix
-    #  Please rotate the labels so that they are readable.
+    # Step 2
+    plt.figure(figsize=(18, 14))
+    sns.heatmap(
+        corr,
+        cmap="coolwarm",
+        center=0.0,
+        square=True,
+        cbar=True
+    )
+    plt.title("Correlation Heatmap (features)")
+    plt.xticks(rotation=90)
+    plt.yticks(rotation=0)
+    plt.tight_layout()
+    plt.show()
+
     return None
+
 
 #######################################################################################################################
 # Function find_no_of_clusters(data):
@@ -64,15 +77,27 @@ def correlation_map(data):
 #######################################################################################################################
 
 def find_noof_clusters(data):
-    # TODO Step 1: Initialize a list to store Within-Cluster Sum of Squares (WCSS) for each value of K
-    #  Hint: Use an empty list to store the WCSS values.
+    wcss = []
+    K_range = range(1, 15)
 
-    # TODO Step 2: Loop through K (Number of Clusters) values from 1 to 14
-    #  Always run KMeans on your data and save the WCSS in your list.
+    X = StandardScaler().fit_transform(data)
 
-    # TODO Step 3: Plot your results. The Plot is what you have done in Exercise 1/Elbow,
-    #  so you can copy most of it.
+    for k in K_range:
+        km = KMeans(n_clusters=k, init="k-means++", n_init=12, random_state=0)
+        km.fit(X)
+        wcss.append(km.inertia_)  # WCSS
+
+    plt.figure(figsize=(8, 5))
+    plt.plot(list(K_range), wcss, marker="o")
+    plt.title("Elbow Method (WCSS / inertia)")
+    plt.xlabel("Number of clusters (K)")
+    plt.ylabel("WCSS (inertia)")
+    plt.grid(True)
+    plt.tight_layout()
+    plt.show()
+
     return None
+
 
 #######################################################################################################################
 # Function compute_results_Kmeans(data, labels):
@@ -93,24 +118,60 @@ def find_noof_clusters(data):
 #   with the true labels ('diagnosis') from the dataset to compute accuracy. It also plots a confusion matrix.
 #######################################################################################################################
 def compute_results_Kmeans(data, labels):
-    # TODO Step 1: Initialize a scaler for standardizing the data
+    X = data.to_numpy() if hasattr(data, "to_numpy") else np.asarray(data)
+    y_true = labels.replace({"M": 0, "B": 1}).to_numpy()
 
-    # TODO Step 2: Initialize K-means clustering with 2 clusters (assuming two classes: 'M' and 'B') --> try out different random states 1 and 4, and check the differences in the results.
+    best = None  # (acc, rs, y_pred_mapped, cm)
 
-    # TODO Step 3: Create a pipeline using `make_pipeline()`.
+    for rs in [1, 4]:
+        pipe = make_pipeline(
+            StandardScaler(),
+            KMeans(n_clusters=2, init="k-means++", n_init=12, random_state=rs)
+        )
 
-    # TODO Step 4: Fit the pipeline to the input data and use it to predict the
-    #  labels assigned by the clustering afterwards.
+        cluster = pipe.fit_predict(X)
 
-    # TODO Step 5: Map the original labels ('diagnosis') to numerical values: 'M' -> 0, 'B' -> 1
-    #  Hint: Use the `replace()` method.
+        # Try both mappings because cluster IDs are arbitrary
+        pred_a = cluster
+        pred_b = 1 - cluster
 
-    # TODO Step 6: Calculate the confusion matrix with the true_labels and the predicted_labels
+        acc_a = (pred_a == y_true).mean()
+        acc_b = (pred_b == y_true).mean()
 
-    # TODO Step 7: Plot the confusion matrix
+        if acc_b > acc_a:
+            y_pred = pred_b
+            acc = acc_b
+        else:
+            y_pred = pred_a
+            acc = acc_a
 
-    # TODO Step 8: Calculate and print the correct and incorrect predictions
+        cm = confusion_matrix(y_true, y_pred, labels=[0, 1])
+
+        if best is None or acc > best[0]:
+            best = (acc, rs, y_pred, cm)
+
+    acc, rs, y_pred, cm = best
+
+    plt.figure(figsize=(5, 4))
+    sns.heatmap(cm, annot=True, fmt="d", cbar=False,
+                xticklabels=["M", "B"], yticklabels=["M", "B"])
+    plt.title(f"Confusion Matrix (KMeans, random_state={rs})")
+    plt.xlabel("Predicted")
+    plt.ylabel("True")
+    plt.tight_layout()
+    plt.show()
+
+    correct = int((y_pred == y_true).sum())
+    incorrect = int((y_pred != y_true).sum())
+    percent = 100.0 * correct / len(y_true)
+
+    print(f"KMeans chosen random_state={rs}")
+    print("Incorrect classifications:", incorrect)
+    print("Correct classifications:", correct)
+    print(f"Correct percentage: {percent:.2f}%")
+
     return None
+
 
 #######################################################################################################################
 # Function compute_dendrogram(data):
@@ -132,14 +193,26 @@ def compute_results_Kmeans(data, labels):
 #######################################################################################################################
 
 def compute_dendrogram(data):
-    # TODO Step 1: Compute the linkage matrix using Ward's method
-    #  Hint: Use the `linkage()` function with `method='ward'`.
+    X = StandardScaler().fit_transform(np.asarray(data))
 
-    # TODO Step 2: Create a dendrogram to visualize the hierarchical clustering
-    #  Hint: Use the `dendrogram()` function from scipy.
+    Z = linkage(X, method="ward")
 
-    # TODO Step 3: Add axis labels for clarity and plot the dendrogram
+    plt.figure(figsize=(14, 6))
+    dendrogram(
+        Z,
+        truncate_mode="level",
+        p=10,
+        no_labels=True,
+        count_sort=True
+    )
+    plt.title("Hierarchical Clustering Dendrogram (Ward linkage)")
+    plt.xlabel("Cluster / samples (truncated)")
+    plt.ylabel("Distance")
+    plt.tight_layout()
+    plt.show()
+
     return None
+
 
 #######################################################################################################################
 # Function computer_results_Agglomerative(data, labels):
@@ -162,49 +235,75 @@ def compute_dendrogram(data):
 #######################################################################################################################
 
 def compute_results_Agglomerative(data, labels):
-    # TODO Step 1: Initialize a scaler for standardizing the data
-    #  Hint: Standardize the data to have mean 0 and standard deviation 1.
+    X = data.to_numpy() if hasattr(data, "to_numpy") else np.asarray(data)
+    y_true = labels.replace({"M": 0, "B": 1}).to_numpy()
 
-    # TODO Step 2: Initialize Agglomerative Clustering with 2 clusters and Ward's linkage
+    scaler = StandardScaler()
+    Xs = scaler.fit_transform(X)
 
-    # TODO Step 3: Create a pipeline again using `make_pipeline()`.
+    agg = AgglomerativeClustering(n_clusters=2, linkage="ward")
+    cluster_labels = agg.fit_predict(Xs)  # <-- FIX: now defined
 
-    # TODO Step 4: Fit the pipeline to the input data and predict the cluster-assigned labels.
-    #  Hint: Use `fit_predict()` instead of `predict()`.
+    # Map cluster IDs to true labels (try both)
+    pred_a = cluster_labels
+    pred_b = 1 - cluster_labels
 
-    # TODO Step 5: Map the original labels ('diagnosis') to numerical values: 'M' -> 0, 'B' -> 1
+    acc_a = (pred_a == y_true).mean()
+    acc_b = (pred_b == y_true).mean()
 
-    # TODO Step 6: Copy your code from KMeans to calculate the confusion matrix,
-    #  plot it, and calculate and print the correct and incorrect predictions.
+    if acc_b > acc_a:
+        y_pred = pred_b
+    else:
+        y_pred = pred_a
 
-    # Step 7: Visualize clustering results --> We did this for you!
-    if 'radius_mean' in data.columns and 'fractal_dimension_mean' in data.columns:
-        # Add cluster assignments to the dataframe
-        data["cluster"] = cluster_labels
+    cm = confusion_matrix(y_true, y_pred, labels=[0, 1])
 
-        # Plot clustering results
+    plt.figure(figsize=(5, 4))
+    sns.heatmap(cm, annot=True, fmt="d", cbar=False,
+                xticklabels=["M", "B"], yticklabels=["M", "B"])
+    plt.title("Confusion Matrix (Agglomerative, Ward)")
+    plt.xlabel("Predicted")
+    plt.ylabel("True")
+    plt.tight_layout()
+    plt.show()
+
+    correct = int((y_pred == y_true).sum())
+    incorrect = int((y_pred != y_true).sum())
+    percent = 100.0 * correct / len(y_true)
+
+    print("Agglomerative (Ward)")
+    print("Incorrect classifications:", incorrect)
+    print("Correct classifications:", correct)
+    print(f"Correct percentage: {percent:.2f}%")
+
+    # Step 7: visualization (your sheet code) - avoid mutating original df
+    if hasattr(data, "columns") and 'radius_mean' in data.columns and 'fractal_dimension_mean' in data.columns:
+        data_plot = data.copy()
+        data_plot["cluster"] = cluster_labels
+
         plt.figure(figsize=(15, 10))
         plt.scatter(
-            data["radius_mean"][data["cluster"] == 0],
-            data["fractal_dimension_mean"][data["cluster"] == 0],
+            data_plot["radius_mean"][data_plot["cluster"] == 0],
+            data_plot["fractal_dimension_mean"][data_plot["cluster"] == 0],
             color="red",
             label="Cluster 0"
         )
         plt.scatter(
-            data["radius_mean"][data["cluster"] == 1],
-            data["fractal_dimension_mean"][data["cluster"] == 1],
+            data_plot["radius_mean"][data_plot["cluster"] == 1],
+            data_plot["fractal_dimension_mean"][data_plot["cluster"] == 1],
             color="blue",
             label="Cluster 1"
         )
         plt.xlabel("radius_mean")
         plt.ylabel("fractal_dimension_mean")
-        plt.title("Scatter Plot of Clustering Results")
+        plt.title("Scatter Plot of Clustering Results (Agglomerative)")
         plt.legend()
         plt.show()
     else:
         print("Scatter plot cannot be generated as 'radius_mean' and 'fractal_dimension_mean' are not in the data.")
 
     return None
+
 
 if __name__ == '__main__':
     ##### TODO: Call your sub-tasks/methods here #####
@@ -224,17 +323,17 @@ if __name__ == '__main__':
     correlation_map(data=dataExceptLabels)
 
     ### Task 2: Find number of clusters ###
-    # find_noof_clusters(data=dataExceptLabels)
+    find_noof_clusters(data=dataExceptLabels)
 
     ### Task 3: Use K-Means to cluster data points and compare it with the ground truth ###
     # Task 3.1: Run it only with 2 features: ['radius_mean','fractal_dimension_mean']
-    # data_two_features = data.loc[:, ['radius_mean', 'fractal_dimension_mean']]
-    # compute_results_Kmeans(data=data_two_features, labels=labels)
+    data_two_features = data.loc[:, ['radius_mean', 'fractal_dimension_mean']]
+    compute_results_Kmeans(data=data_two_features, labels=labels)
     # Task 3.2: Run it with the whole data (all features)
-    # compute_results_Kmeans(data=dataExceptLabels, labels=labels)
+    compute_results_Kmeans(data=dataExceptLabels, labels=labels)
 
     ### Task 4: Compute a Dendrogram ###
-    # compute_dendrogram(data=dataExceptLabels)
+    compute_dendrogram(data=dataExceptLabels)
 
     ### Task 5: Run Agglomerative Clustering to cluster data points and compare it with the ground truth  ###
-    # compute_results_Agglomerative(data=dataExceptLabels, labels=labels)
+    compute_results_Agglomerative(data=dataExceptLabels, labels=labels)
