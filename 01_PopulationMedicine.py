@@ -38,7 +38,7 @@ def plot_random_data(n_samples=2000, centers=[[-2, -1], [4, 4], [1, 1]]):
     plt.scatter(X[:, 0], X[:, 1], c=y, alpha=0.5)
 
     # TODO Step 3: Set the title of the plot, assign Labels to the axis and display the plot
-    plt.title('Plot Random Data')
+    plt.title('Random Data')
     plt.xlabel('Feature 1')
     plt.ylabel('Feature 2')
     plt.grid(True)
