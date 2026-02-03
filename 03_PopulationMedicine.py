@@ -29,22 +29,34 @@ def get_neighbors(dataset, point, epsilon):
     for q_idx in range(len(dataset)):
         q = dataset[q_idx]
         dist = np.linalg.norm(point - q)
-        if dist < epsilon:
+        if dist <= epsilon:
             neighbors.add(q_idx)
     return neighbors
 
+
 def expand_cluster(dataset, point_idx, neighbors: set, epsilon, min_points, visited: set):
     cluster = {point_idx}
-    point = dataset[point_idx]
-    for q_idx in range(len(neighbors)):
+
+    queue = deque(neighbors)
+    neighbors = set(neighbors)
+
+    while queue:
+        q_idx = queue.popleft()
+
         if q_idx not in visited:
             visited.add(q_idx)
             q = dataset[q_idx]
             q_neighbors = get_neighbors(dataset, q, epsilon)
+
             if len(q_neighbors) >= min_points:
-                neighbors.update(q_neighbors)
+                for n_idx in q_neighbors:
+                    if n_idx not in neighbors:
+                        neighbors.add(n_idx)
+                        queue.append(n_idx)
+
         if q_idx not in cluster:
             cluster.add(q_idx)
+
     return cluster
 
 
@@ -65,10 +77,9 @@ def expand_cluster(dataset, point_idx, neighbors: set, epsilon, min_points, visi
 #   - we return None here since we don't want to further progress on the output
 #######################################################################################################################
 
-def db_scan(dataExceptLabels, labels, eps=0.3, minPts=10):
-    # TODO Step 1: Scale data first and convert to numpy use the StandardScaler again
-    scaler = StandardScaler()
-    D = scaler.fit_transform(dataExceptLabels.to_numpy())
+def db_scan(dataExceptLabels, labels, eps=0.1, minPts=10):
+    pca = PCA(n_components=2)
+    D = pca.fit_transform(dataExceptLabels)
 
     # TODO Step 2: Initialize some variables you might need to store information. Follow the pseudo-code.
     C = []
@@ -92,6 +103,20 @@ def db_scan(dataExceptLabels, labels, eps=0.3, minPts=10):
                 new_cluster = expand_cluster(D, p_idx, neighbors, eps, minPts, visited)
                 C.append(new_cluster)
 
+    for p_idx in range(len(D)):
+        if p_idx not in visited:
+            visited.add(p_idx)
+            p = D[p_idx]
+            neighbors = get_neighbors(D, p, eps)
+
+            if len(neighbors) < minPts:
+                N.add(p_idx)
+            else:
+                new_cluster = expand_cluster(D, p_idx, neighbors, eps, minPts, visited)
+                C.append(new_cluster)
+
+                N.difference_update(new_cluster)
+
     # TODO Step 4: Lets analyse the results
     # TODO Step 4.1: Lets print the amount of clusters and noise data points first.
     print("Number of clusters: ", len(C))
@@ -100,11 +125,9 @@ def db_scan(dataExceptLabels, labels, eps=0.3, minPts=10):
     # TODO Step 4.2: Lets create a new numpy array and for each data point we add the label information according to DBSCAN
     #  use (len(data), -1) to initialize all points as noise
     cluster_labels = np.full(len(D), -1, dtype=int)
-    for q_idx in range(len(D)):
-        if q_idx not in N:
-            for cluster_idx, cluster in enumerate(C):
-                if q_idx in cluster:
-                    cluster_labels[q_idx] = cluster_idx
+    for cluster_idx, cluster in enumerate(C):
+        for idx in cluster:
+            cluster_labels[idx] = cluster_idx
 
     # TODO Step 4.3: Lets plot all data point (noise once included)
     #  Use the following color code:
