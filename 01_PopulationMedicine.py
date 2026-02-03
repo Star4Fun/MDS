@@ -1,6 +1,6 @@
-import numpy as np 
-import matplotlib.pyplot as plt 
-from sklearn.cluster import KMeans 
+import numpy as np
+import matplotlib.pyplot as plt
+from sklearn.cluster import KMeans
 from sklearn.datasets import make_blobs
 from sklearn.metrics import silhouette_samples, silhouette_score
 from scipy.spatial.distance import cdist
@@ -47,6 +47,7 @@ def plot_random_data(n_samples=2000, centers=[[-2, -1], [4, 4], [1, 1]]):
 
     return X, y  # Return generated data for reuse
 
+
 #######################################################################################################################
 # Function: BSAS(data, max_clusters=3, threshold=1.0)
 # Description:
@@ -70,11 +71,11 @@ def BSAS(data, max_clusters=3, threshold=1.0):
     n_samples = data.shape[0]
     if n_samples == 0:
         return np.empty((0, data.shape[1])), np.empty((0,), dtype=int)
-    
-    #initialize
+
+    # initialize
     centers = [data[0].astype(float).copy()]
     counts = [1]
-    labels = -1 * np.ones(n_samples, dtype=int) 
+    labels = -1 * np.ones(n_samples, dtype=int)
     labels[0] = 0
     n_clusters = 1
 
@@ -101,7 +102,8 @@ def BSAS(data, max_clusters=3, threshold=1.0):
             labels[i] = closest_cluster
             counts[closest_cluster] += 1
             # Update the cluster center
-            centers[closest_cluster] = centers[closest_cluster] + (x - centers[closest_cluster]) / counts[closest_cluster]
+            centers[closest_cluster] = centers[closest_cluster] + (x - centers[closest_cluster]) / counts[
+                closest_cluster]
 
     # TODO Step 3: Plot the clustered data points and cluster centers
     #  Titles, x and y labels are always nice to have. Display the plot.
@@ -116,7 +118,7 @@ def BSAS(data, max_clusters=3, threshold=1.0):
     plt.xlabel('Feature 1')
     plt.ylabel('Feature 2')
     plt.grid(True)
-    #plt.tight_layout()
+    # plt.tight_layout()
     plt.show()
 
     # TODO Step 4: Return cluster centers and labels as numpy arrays.
@@ -159,8 +161,10 @@ def k_means(nb_clusters, data, generate_plot=True):
 
         plt.figure()
         for k, col in zip(range(nb_clusters), colors):
-            plt.scatter(data[k_means_labels == k, 0], data[k_means_labels == k, 1], c=[col], alpha=0.5, label=f'cluster {k}')
-            plt.scatter(k_means_cluster_centers[k, 0], k_means_cluster_centers[k, 1], c='k', marker='x', s=100, linewidths=2)
+            plt.scatter(data[k_means_labels == k, 0], data[k_means_labels == k, 1], c=[col], alpha=0.5,
+                        label=f'cluster {k}')
+            plt.scatter(k_means_cluster_centers[k, 0], k_means_cluster_centers[k, 1], c='k', marker='x', s=100,
+                        linewidths=2)
         plt.title(f'K-Means Clustering (k={nb_clusters})')
         plt.xlabel('Feature 1')
         plt.ylabel('Feature 2')
@@ -299,7 +303,7 @@ def silhouette_analysis(data, cluster_centers, labels, n_clusters=3, algorithm_n
 if __name__ == '__main__':
     ##### TODO:Call your sub-tasks/methods here. Uncomment each Task step by step #####
     ### Task 1: Random Plot ###
-    plot_random_data(n_samples=2000) # run random data with 2000 samples
+    plot_random_data(n_samples=2000)  # run random data with 2000 samples
 
     # Create some 2D Data which is needed for the following Algorithms as input.
     x1_axis_data = np.array([3, 1, 1, 2, 1, 6, 6, 6, 5, 6, 7, 8, 9, 8, 9, 9, 8])
@@ -313,9 +317,11 @@ if __name__ == '__main__':
     k_means_cluster_centers, k_means_asigned_labels = k_means(nb_clusters=3, data=combined_data, generate_plot=True)
 
     ### Task 4: Run the Elbow function with k-Means from 0 until max_clusters for our 2D data ###
-    compute_elbow(max_clusters=10, data=combined_data)  #Plot the elbow to determine the no. of clusters.
+    compute_elbow(max_clusters=10, data=combined_data)  # Plot the elbow to determine the no. of clusters.
 
     ### Task 5 (BONUS): Run the silhouette analysis for k-Means with our 2D data ###
     # You can compute the scores on the results of your BSAB and the k_means.
-    silhouette_analysis(data=combined_data, cluster_centers=k_means_cluster_centers, labels=k_means_asigned_labels, n_clusters=3, algorithm_name='K-Means')
-    silhouette_analysis(data=combined_data, cluster_centers=bsas_cluster_centers, labels=bsas_labels, n_clusters=3, algorithm_name='BSAS')
+    silhouette_analysis(data=combined_data, cluster_centers=k_means_cluster_centers, labels=k_means_asigned_labels,
+                        n_clusters=3, algorithm_name='K-Means')
+    silhouette_analysis(data=combined_data, cluster_centers=bsas_cluster_centers, labels=bsas_labels, n_clusters=3,
+                        algorithm_name='BSAS')
